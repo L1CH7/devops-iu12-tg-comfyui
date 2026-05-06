@@ -1,0 +1,135 @@
+name: pc1-server
+
+networks:
+  app_network:
+    driver: bridge
+
+volumes:
+  pg_data:
+  minio_data:
+
+services:
+  # --- 1. Reverse Proxy ---
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"   # Слушаем HTTP внутри Yggdrasil
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    networks:
+      - app_network
+
+  # --- 2. Databases & Storage ---
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - app_network
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    networks:
+      - app_network
+
+  minio:
+    image: minio/minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - app_network
+
+  # --- 3. Backend & Bot ---
+  server-api:
+    build: 
+      context: ../../services/server-api
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: ../../.env
+    networks:
+      - app_network
+    depends_on:
+      - postgres
+      - redis
+
+  tg-bot:
+    build:
+      context: ../../services/tg-bot
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: ../../.env
+    networks:
+      - app_network
+    depends_on:
+      - server-api
+
+  # --- 4. AI & Workflows ---
+  n8n:
+    image: docker.n8n.io/n8nio/n8n
+    restart: unless-stopped
+    environment:
+      - N8N_HOST=${PC1_YGG_IP}
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - WEBHOOK_URL=http://${PC1_YGG_IP}/n8n/
+    networks:
+      - app_network
+
+  comfyui:
+    image: yanwk/comfyui-boot:cu130-slim-v2
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    networks:
+      - app_network
+
+  llama-cpp:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    restart: unless-stopped
+    volumes:
+      - ../../storage-models/models:/models
+    environment:
+      - LLAMA_ARG_MODEL=/models/${LLAMA_MODEL_FILE:-model.gguf}
+      - LLAMA_ARG_HOST=0.0.0.0
+      - LLAMA_ARG_PORT=8080
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    networks:
+      - app_network
+
+  # --- 5. Observability (Отправка логов на ПК 2) ---
+  promtail:
+    image: grafana/promtail:latest
+    restart: unless-stopped
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: -config.file=/etc/promtail/config.yml
+    # В конфиге promtail будет указан адрес отправки: http://${PC2_YGG_IP}:3100/loki/api/v1/push
+    networks:
+      - app_network
+
+  # TODO: Добавить watchdog/скрипт для взаимного контроля ПК2

@@ -1,0 +1,71 @@
+name: pc2-monitor
+
+networks:
+  monitor_network:
+    driver: bridge
+
+volumes:
+  prometheus_data:
+  grafana_data:
+  loki_data:
+
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    ports:
+      - "9090:9090" # Доступно внутри Yggdrasil
+    volumes:
+      - prometheus_data:/prometheus
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    networks:
+      - monitor_network
+
+  loki:
+    image: grafana/loki:latest
+    restart: unless-stopped
+    ports:
+      - "3100:3100" # Сюда Promtail с ПК1 будет слать логи
+    volumes:
+      - loki_data:/loki
+    networks:
+      - monitor_network
+
+  grafana:
+    image: grafana/grafana:latest
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin_grafana
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - monitor_network
+
+  promtail:
+    image: grafana/promtail:latest
+    restart: unless-stopped
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./promtail-config.yml:/etc/promtail/config.yml:ro
+    command: -config.file=/etc/promtail/config.yml
+    networks:
+      - monitor_network
+
+  # Утилита для нагрузочного тестирования API на ПК 1
+  k6:
+    image: grafana/k6:latest
+    profiles:
+      - load-testing # Запускается только вручную: docker-compose --profile load-testing up k6
+    networks:
+      - monitor_network
+
+  # --- 2. Alerting & Heartbeat ---
+  alertmanager:
+    image: prom/alertmanager:latest
+    restart: unless-stopped
+    networks:
+      - monitor_network
+    # TODO: Настроить отправку вебхуков в админский ТГ при падении ПК1
