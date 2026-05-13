@@ -1,0 +1,19 @@
+# TODO: Наполнить
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # Мониторим сам Прометей
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # Мониторим сервисы на ПК1 (если они будут отдавать метрики)
+  - job_name: "pc1_services"
+    # Prometheus не поддерживает переменные окружения в targets по умолчанию.
+    # Замените на реальный IP (например, 192.168.0.10)
+    static_configs:
+      - targets: 
+          - "192.168.0.10:8000" # Пример для API на ПК1

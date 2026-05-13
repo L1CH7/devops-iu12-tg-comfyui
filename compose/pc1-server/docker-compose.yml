@@ -1,0 +1,130 @@
+name: pc1-server
+
+networks:
+  app_network:
+    driver: bridge
+
+volumes:
+  pg_data:
+  minio_data:
+  n8n_data:
+  promtail_data:
+
+services:
+  # --- 1. Reverse Proxy ---
+  caddy:
+    image: caddy:2.11.2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"   # Слушаем HTTP внутри Yggdrasil
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    networks:
+      - app_network
+
+  # --- 2. Databases & Storage ---
+  postgres:
+    image: postgres:18.3-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - app_network
+
+  redis:
+    image: redis:7.2.4-alpine
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    networks:
+      - app_network
+
+  minio:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - app_network
+
+  # --- 3. Backend & Bot ---
+  server-api:
+    build: 
+      context: ../../services/server-api
+      dockerfile: Dockerfile
+    restart: "no" # Заглушка, не перезапускаем при падении
+    env_file: .env
+    networks:
+      - app_network
+    depends_on:
+      - postgres
+      - redis
+
+  tg-bot:
+    build:
+      context: ../../services/tg-bot
+      dockerfile: Dockerfile
+    restart: "no" # Заглушка, не перезапускаем при падении
+    env_file: .env
+    networks:
+      - app_network
+    depends_on:
+      - server-api
+
+  # --- 4. AI & Workflows ---
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:2.21.1
+    restart: unless-stopped
+    environment:
+      - N8N_HOST=[${PC1_YGG_IP}]
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - WEBHOOK_URL=http://[${PC1_YGG_IP}]/n8n/
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      - app_network
+
+  comfyui:
+    image: yanwk/comfyui-boot:cu130-slim-v2
+    restart: unless-stopped
+    gpus: all
+    networks:
+      - app_network
+
+  llama-cpp:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda13-b9115
+    restart: unless-stopped
+    volumes:
+      - ../../storage-models/models:/models
+    environment:
+      - LLAMA_ARG_MODEL=/models/${LLAMA_MODEL_FILE:-model.gguf}
+      - LLAMA_ARG_HOST=0.0.0.0
+      - LLAMA_ARG_PORT=8080
+    gpus: all
+    networks:
+      - app_network
+
+  # --- 5. Observability (Отправка логов на ПК 2) ---
+  promtail:
+    image: grafana/promtail:3.6.10
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./promtail-config.yml:/etc/promtail/config.yml:ro
+      - promtail_data:/var/lib/promtail
+    command: -config.file=/etc/promtail/config.yml -config.expand-env=true
+    # В конфиге promtail будет указан адрес отправки через переменную LOKI_URL
+    networks:
+      - app_network
+
+  # TODO: Добавить watchdog/скрипт для взаимного контроля ПК2
