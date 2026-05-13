@@ -22,7 +22,10 @@ jobs:
       - name: Build and Deploy Server
         # Говорим раннеру перейти в папку первого ПК перед выполнением команд
         working-directory: ./compose/pc1-server
-        run: docker compose up -d --build
+        # Устанавливаем переменную окружения для BuildKit и флаги для Compose
+        run: |
+          export BUILDKIT_PROGRESS=plain
+          docker compose --progress=plain up -d --build --quiet-pull
 
   # --- ДЕПЛОЙ МОНИТОРИНГА ---
   deploy-monitor:
@@ -39,4 +42,7 @@ jobs:
       - name: Build and Deploy Monitor
         # Говорим раннеру перейти в папку второго ПК
         working-directory: ./compose/pc2-monitor
-        run: docker compose up -d --build
+        # Устанавливаем переменную окружения для BuildKit и флаги для Compose
+        run: |
+          export BUILDKIT_PROGRESS=plain
+          docker compose --progress=plain up -d --build --quiet-pull
