@@ -12,6 +12,6 @@ WORKDIR /app
 # COPY --from=builder /app/.venv /app/.venv
 # COPY src/ ./src/
 
-# Пока ребята не написали код, контейнер будет просто "висеть", чтобы не падал compose
-CMD ["tail", "-f", "/dev/null"]
+# Пока код и зависимости не добавлены, контейнер должен явно сигнализировать о неготовности
+CMD ["sh", "-c", "echo 'tg-bot service is not ready: application code and/or dependencies are missing' >&2; exit 1"]
 # В будущем заменить на: CMD ["/app/.venv/bin/python", "-m", "src.main"]

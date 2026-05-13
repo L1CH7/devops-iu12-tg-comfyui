@@ -12,6 +12,7 @@ WORKDIR /app
 # COPY --from=builder /app/.venv /app/.venv
 # COPY src/ ./src/
 
-# Пока ребята не написали код, контейнер будет просто "висеть", чтобы не падал compose
-CMD ["tail", "-f", "/dev/null"]
+# Пока код сервиса и зависимости не готовы, контейнер должен явно падать,
+# чтобы CI/CD и orchestration не считали сервис успешно запущенным.
+CMD ["/bin/sh", "-c", "echo 'server-api is not runnable yet: application code/dependencies are not included in the image' >&2; exit 1"]
 # В будущем заменить на: CMD ["/app/.venv/bin/python", "-m", "src.main"]
