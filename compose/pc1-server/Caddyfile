@@ -1,1 +1,23 @@
-# TODO: Наполнить
+# Слушаем порт 80 (HTTP) без привязки к конкретному домену
+:80 {
+    # 1. Запросы к API Telegram-бота или твоего бэкенда
+    handle /api/* {
+        reverse_proxy server-api:8000 # Укажи правильный внутренний порт твоего API
+    }
+
+    # 2. Интерфейс n8n
+    handle /n8n/* {
+        # n8n крутится на порту 5678 внутри контейнера
+        reverse_proxy n8n:5678
+    }
+
+    # 3. Интерфейс ComfyUI
+    handle /comfy/* {
+        reverse_proxy comfyui:8188
+    }
+
+    # Fallback (если зашли просто по IP в корень)
+    handle {
+        respond "AI Server is running. All systems nominal." 200
+    }
+}

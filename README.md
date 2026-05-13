@@ -34,7 +34,18 @@
 ```
 
 ## 5. Быстрый запуск
+Для запуска инфраструктуры используйте соответствующие директории:
+
+**На основном сервере (ПК1):**
 ```bash
+cd compose/pc1-server
 cp .env.example .env
-docker-compose up -d --build
+docker compose up -d --build
+```
+
+**На сервере мониторинга (ПК2):**
+```bash
+cd compose/pc2-monitor
+cp .env.example .env
+docker compose up -d --build
 ```
