@@ -3,7 +3,7 @@ name: Deploy Infrastructure
 on:
   push:
     branches:
-      - develop 
+      - develop
 
 jobs:
   # --- ДЕПЛОЙ ОСНОВНОГО СЕРВЕРА ---
@@ -17,7 +17,8 @@ jobs:
 
       - name: Generate .env file
         run: |
-          echo "${{ secrets.ENV_PC1 }}" > ./compose/pc1-server/.env
+          printf "%s\n" "${{ secrets.ENV_PC1 }}" > ./compose/pc1-server/.env
+          chmod 600 ./compose/pc1-server/.env
 
       - name: Build and Deploy Server
         # Говорим раннеру перейти в папку первого ПК перед выполнением команд
@@ -26,6 +27,9 @@ jobs:
         run: |
           export BUILDKIT_PROGRESS=plain
           docker compose --progress=plain up -d --build --quiet-pull
+
+      - name: Clean up old Docker images
+        run: docker system prune -f
 
   # --- ДЕПЛОЙ МОНИТОРИНГА ---
   deploy-monitor:
@@ -37,7 +41,8 @@ jobs:
 
       - name: Generate .env file
         run: |
-          echo "${{ secrets.ENV_PC2 }}" > ./compose/pc2-monitor/.env
+          printf "%s\n" "${{ secrets.ENV_PC2 }}" > ./compose/pc2-monitor/.env
+          chmod 600 ./compose/pc2-monitor/.env
 
       - name: Build and Deploy Monitor
         # Говорим раннеру перейти в папку второго ПК
@@ -46,3 +51,6 @@ jobs:
         run: |
           export BUILDKIT_PROGRESS=plain
           docker compose --progress=plain up -d --build --quiet-pull
+
+      - name: Clean up old Docker images
+        run: docker system prune -f
