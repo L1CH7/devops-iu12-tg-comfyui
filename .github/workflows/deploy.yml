@@ -26,7 +26,7 @@ jobs:
         # Устанавливаем переменную окружения для BuildKit и флаги для Compose
         run: |
           export BUILDKIT_PROGRESS=plain
-          docker compose --progress=plain up -d --build --quiet-pull
+          docker compose --progress=plain up -d --build --quiet-pull --wait
 
       - name: Clean up old Docker images
         run: docker system prune -f
@@ -50,7 +50,7 @@ jobs:
         # Устанавливаем переменную окружения для BuildKit и флаги для Compose
         run: |
           export BUILDKIT_PROGRESS=plain
-          docker compose --progress=plain up -d --build --quiet-pull
+          docker compose --progress=plain up -d --build --quiet-pull --wait
 
       - name: Clean up old Docker images
         run: docker system prune -f

@@ -11,7 +11,7 @@ volumes:
 services:
   # --- 1. Reverse Proxy ---
   caddy:
-    image: caddy:2-alpine
+    image: caddy:2.7.6-alpine
     restart: unless-stopped
     ports:
       - "80:80"   # Слушаем HTTP внутри Yggdrasil
@@ -22,7 +22,7 @@ services:
 
   # --- 2. Databases & Storage ---
   postgres:
-    image: postgres:15-alpine
+    image: postgres:15.6-alpine
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
@@ -34,7 +34,7 @@ services:
       - app_network
 
   redis:
-    image: redis:7-alpine
+    image: redis:7.2.4-alpine
     restart: unless-stopped
     command: redis-server --requirepass ${REDIS_PASSWORD}
     networks:
@@ -57,7 +57,7 @@ services:
     build: 
       context: ../../services/server-api
       dockerfile: Dockerfile
-    restart: unless-stopped
+    restart: "no" # Заглушка, не перезапускаем при падении
     env_file: .env
     networks:
       - app_network
@@ -69,7 +69,7 @@ services:
     build:
       context: ../../services/tg-bot
       dockerfile: Dockerfile
-    restart: unless-stopped
+    restart: "no" # Заглушка, не перезапускаем при падении
     env_file: .env
     networks:
       - app_network
@@ -78,7 +78,7 @@ services:
 
   # --- 4. AI & Workflows ---
   n8n:
-    image: docker.n8n.io/n8nio/n8n
+    image: docker.n8n.io/n8nio/n8n:1.33.1
     restart: unless-stopped
     environment:
       - N8N_HOST=${PC1_YGG_IP}
@@ -122,7 +122,7 @@ services:
 
   # --- 5. Observability (Отправка логов на ПК 2) ---
   promtail:
-    image: grafana/promtail:latest
+    image: grafana/promtail:2.9.4
     restart: unless-stopped
     env_file: .env
     volumes:

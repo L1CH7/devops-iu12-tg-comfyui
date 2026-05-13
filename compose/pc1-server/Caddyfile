@@ -6,13 +6,13 @@
     }
 
     # 2. Интерфейс n8n
-    handle /n8n/* {
+    handle_path /n8n/* {
         # n8n крутится на порту 5678 внутри контейнера
         reverse_proxy n8n:5678
     }
 
     # 3. Интерфейс ComfyUI
-    handle /comfy/* {
+    handle_path /comfy/* {
         reverse_proxy comfyui:8188
     }
 

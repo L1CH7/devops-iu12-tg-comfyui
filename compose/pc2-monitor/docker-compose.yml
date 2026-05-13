@@ -11,11 +11,12 @@ volumes:
 
 services:
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v2.51.2
     restart: unless-stopped
     command: 
       - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--config.expand-env=true'
+      # Если нужно расширение переменных, используйте --enable-feature=expand-external-labels
+      # Но для targets оно обычно не работает напрямую в конфиге.
     ports:
       - "9090:9090" # Доступно внутри Yggdrasil
     env_file: .env
@@ -29,8 +30,9 @@ services:
       - monitor_network
 
   loki:
-    image: grafana/loki:latest
+    image: grafana/loki:2.9.4
     restart: unless-stopped
+    user: root # Для обхода проблем с правами на запись в /loki при локальном запуске
     ports:
       - "3100:3100" # Сюда Promtail с ПК1 будет слать логи
     volumes:
@@ -39,7 +41,7 @@ services:
       - monitor_network
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:10.4.1
     restart: unless-stopped
     ports:
       - "3000:3000"
@@ -52,7 +54,7 @@ services:
       - monitor_network
 
   promtail:
-    image: grafana/promtail:latest
+    image: grafana/promtail:2.9.4
     restart: unless-stopped
     volumes:
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
@@ -64,7 +66,7 @@ services:
 
   # Утилита для нагрузочного тестирования API на ПК 1
   k6:
-    image: grafana/k6:latest
+    image: grafana/k6:0.49.0
     profiles:
       - load-testing # Запускается только вручную: docker-compose --profile load-testing up k6
     networks:
@@ -72,7 +74,7 @@ services:
 
   # --- 2. Alerting & Heartbeat ---
   alertmanager:
-    image: prom/alertmanager:latest
+    image: prom/alertmanager:v0.27.0
     restart: unless-stopped
     networks:
       - monitor_network
