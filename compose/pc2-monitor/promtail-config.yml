@@ -6,7 +6,7 @@ clients:
   - url: http://loki:3100/loki/api/v1/push
 
 positions:
-  filename: /tmp/positions.yaml
+  filename: /var/lib/promtail/positions.yaml
 
 scrape_configs:
   - job_name: docker

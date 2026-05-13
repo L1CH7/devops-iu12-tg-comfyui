@@ -23,13 +23,12 @@
 ## 4. Структура проекта
 ```text
 .
-├── compose/                # Конфиги Docker Compose (include)
-├── services/               # Исходный код сервисов
+├── compose/                # Конфиги Docker Compose для разных хостов
+│   ├── pc1-server/         # Основной стек (БД, API, AI, Proxy)
+│   └── pc2-monitor/        # Стек мониторинга (PLG, Prometheus)
+├── services/               # Исходный код микросервисов
 │   ├── tg-bot/             # Telegram-бот
-│   ├── server-api/         # Бэкенд на Python/C++
-│   └── .../      # Остальные сервисы
-├── docker-compose.yml      # Головной файл запуска
-├── .env.example            # Шаблон секретов
+│   └── server-api/         # Бэкенд
 └── README.md
 ```
 

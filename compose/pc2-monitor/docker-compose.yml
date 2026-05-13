@@ -8,10 +8,11 @@ volumes:
   prometheus_data:
   grafana_data:
   loki_data:
+  promtail_data:
 
 services:
   prometheus:
-    image: prom/prometheus:v2.51.2
+    image: prom/prometheus:v2.55.0
     restart: unless-stopped
     command: 
       - '--config.file=/etc/prometheus/prometheus.yml'
@@ -19,10 +20,9 @@ services:
       # Но для targets оно обычно не работает напрямую в конфиге.
     ports:
       - "9090:9090" # Доступно внутри Yggdrasil
-    env_file: .env
-    # Прокидываем LAN IP первого компа внутрь контейнера
-    environment:
-      - PC1_TARGET=${PC1_LAN_IP}
+    # Прокидываем LAN IP первого компа внутрь контейнера (если используется внешнее расширение)
+    # environment:
+    #   - PC1_TARGET=${PC1_LAN_IP}
     volumes:
       - prometheus_data:/prometheus
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
@@ -30,7 +30,7 @@ services:
       - monitor_network
 
   loki:
-    image: grafana/loki:2.9.4
+    image: grafana/loki:3.7.1
     restart: unless-stopped
     user: root # Для обхода проблем с правами на запись в /loki при локальном запуске
     ports:
@@ -41,7 +41,7 @@ services:
       - monitor_network
 
   grafana:
-    image: grafana/grafana:10.4.1
+    image: grafana/grafana:12.4.3
     restart: unless-stopped
     ports:
       - "3000:3000"
@@ -54,12 +54,13 @@ services:
       - monitor_network
 
   promtail:
-    image: grafana/promtail:2.9.4
+    image: grafana/promtail:3.6.10
     restart: unless-stopped
     volumes:
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./promtail-config.yml:/etc/promtail/config.yml:ro
+      - promtail_data:/var/lib/promtail
     command: -config.file=/etc/promtail/config.yml
     networks:
       - monitor_network

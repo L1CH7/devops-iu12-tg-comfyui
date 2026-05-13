@@ -29,7 +29,12 @@ jobs:
           docker compose --progress=plain up -d --build --quiet-pull --wait
 
       - name: Clean up old Docker images
-        run: docker system prune -f
+        if: always()
+        run: docker image prune -f
+
+      - name: Remove sensitive files
+        if: always()
+        run: rm -f ./compose/pc1-server/.env
 
   # --- ДЕПЛОЙ МОНИТОРИНГА ---
   deploy-monitor:
@@ -53,4 +58,9 @@ jobs:
           docker compose --progress=plain up -d --build --quiet-pull --wait
 
       - name: Clean up old Docker images
-        run: docker system prune -f
+        if: always()
+        run: docker image prune -f
+
+      - name: Remove sensitive files
+        if: always()
+        run: rm -f ./compose/pc2-monitor/.env
