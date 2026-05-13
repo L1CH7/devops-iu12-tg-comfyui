@@ -3,7 +3,7 @@ name: Deploy Infrastructure
 on:
   push:
     branches:
-      - feature/setup-cicd # сменить на develop
+      - develop 
 
 jobs:
   # --- ДЕПЛОЙ ОСНОВНОГО СЕРВЕРА ---
