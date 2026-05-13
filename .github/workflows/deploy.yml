@@ -1,0 +1,42 @@
+name: Deploy Infrastructure
+
+on:
+  push:
+    branches:
+      - feature/setup-cicd # сменить на develop
+
+jobs:
+  # --- ДЕПЛОЙ ОСНОВНОГО СЕРВЕРА ---
+  deploy-server:
+    # Указываем массив лейблов. GitHub будет искать раннер, у которого есть оба.
+    runs-on: [self-hosted, pc1-server]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Generate .env file
+        run: |
+          echo "${{ secrets.ENV_PC1 }}" > ./compose/pc1-server/.env
+
+      - name: Build and Deploy Server
+        # Говорим раннеру перейти в папку первого ПК перед выполнением команд
+        working-directory: ./compose/pc1-server
+        run: docker compose up -d --build
+
+  # --- ДЕПЛОЙ МОНИТОРИНГА ---
+  deploy-monitor:
+    runs-on: [self-hosted, pc2-monitor]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Generate .env file
+        run: |
+          echo "${{ secrets.ENV_PC2 }}" > ./compose/pc2-monitor/.env
+
+      - name: Build and Deploy Monitor
+        # Говорим раннеру перейти в папку второго ПК
+        working-directory: ./compose/pc2-monitor
+        run: docker compose up -d --build

@@ -13,8 +13,15 @@ services:
   prometheus:
     image: prom/prometheus:latest
     restart: unless-stopped
+    command: 
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--config.expand-env=true'
     ports:
       - "9090:9090" # Доступно внутри Yggdrasil
+    env_file: .env
+    # Прокидываем LAN IP первого компа внутрь контейнера
+    environment:
+      - PC1_TARGET=${PC1_LAN_IP}
     volumes:
       - prometheus_data:/prometheus
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
@@ -36,8 +43,9 @@ services:
     restart: unless-stopped
     ports:
       - "3000:3000"
+    env_file: .env
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin_grafana
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
     volumes:
       - grafana_data:/var/lib/grafana
     networks:

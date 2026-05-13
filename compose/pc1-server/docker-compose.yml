@@ -58,7 +58,7 @@ services:
       context: ../../services/server-api
       dockerfile: Dockerfile
     restart: unless-stopped
-    env_file: ../../.env
+    env_file: .env
     networks:
       - app_network
     depends_on:
@@ -70,7 +70,7 @@ services:
       context: ../../services/tg-bot
       dockerfile: Dockerfile
     restart: unless-stopped
-    env_file: ../../.env
+    env_file: .env
     networks:
       - app_network
     depends_on:
@@ -124,6 +124,7 @@ services:
   promtail:
     image: grafana/promtail:latest
     restart: unless-stopped
+    env_file: .env
     volumes:
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
