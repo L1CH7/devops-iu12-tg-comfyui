@@ -95,13 +95,7 @@ services:
   comfyui:
     image: yanwk/comfyui-boot:cu130-slim-v2
     restart: unless-stopped
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
+    gpus: all
     networks:
       - app_network
 
@@ -114,13 +108,7 @@ services:
       - LLAMA_ARG_MODEL=/models/${LLAMA_MODEL_FILE:-model.gguf}
       - LLAMA_ARG_HOST=0.0.0.0
       - LLAMA_ARG_PORT=8080
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
+    gpus: all
     networks:
       - app_network
 
@@ -134,7 +122,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./promtail-config.yml:/etc/promtail/config.yml:ro
       - promtail_data:/var/lib/promtail
-    command: -config.file=/etc/promtail/config.yml
+    command: -config.file=/etc/promtail/config.yml -config.expand-env=true
     # В конфиге promtail будет указан адрес отправки через переменную LOKI_URL
     networks:
       - app_network
