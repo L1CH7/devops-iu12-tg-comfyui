@@ -24,7 +24,7 @@ services:
 
   # --- 2. Databases & Storage ---
   postgres:
-    image: postgres:18.3-alpine
+    image: postgres:16-alpine
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
@@ -93,24 +93,25 @@ services:
       - app_network
 
   comfyui:
-    image: yanwk/comfyui-boot:cu130-slim-v2
+    image: yanwk/comfyui-boot:cu126-slim
     restart: unless-stopped
     gpus: all
     networks:
       - app_network
 
-  llama-cpp:
-    image: ghcr.io/ggml-org/llama.cpp:server-cuda13-b9115
-    restart: unless-stopped
-    volumes:
-      - ../../storage-models/models:/models
-    environment:
-      - LLAMA_ARG_MODEL=/models/${LLAMA_MODEL_FILE:-model.gguf}
-      - LLAMA_ARG_HOST=0.0.0.0
-      - LLAMA_ARG_PORT=8080
-    gpus: all
-    networks:
-      - app_network
+# -- Закомментировано за текущей ненадобностью --
+#  llama-cpp:
+#    image: ghcr.io/ggml-org/llama.cpp:server-cuda13-b9115
+#    restart: unless-stopped
+#    volumes:
+#      - ../../storage-models/models:/models
+#    environment:
+#      - LLAMA_ARG_MODEL=/models/${LLAMA_MODEL_FILE:-model.gguf}
+#      - LLAMA_ARG_HOST=0.0.0.0
+#      - LLAMA_ARG_PORT=8080
+#    gpus: all
+#    networks:
+#      - app_network
 
   # --- 5. Observability (Отправка логов на ПК 2) ---
   promtail:
