@@ -29,6 +29,10 @@ jobs:
           export BUILDKIT_PROGRESS=plain
           docker compose --progress=plain up -d --build --quiet-pull
 
+      - name: Run Infrastructure Tests
+        run: |
+          python3 ./tests/test_infra.py --pc1
+
       - name: Clean up old Docker images
         if: always()
         run: docker image prune -f
@@ -57,6 +61,10 @@ jobs:
         run: |
           export BUILDKIT_PROGRESS=plain
           docker compose --progress=plain up -d --build --quiet-pull --wait
+
+      - name: Run Infrastructure Tests
+        run: |
+          python3 ./tests/test_infra.py --pc2
 
       - name: Clean up old Docker images
         if: always()
