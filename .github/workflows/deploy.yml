@@ -33,6 +33,11 @@ jobs:
         run: |
           python3 ./tests/test_infra.py --only-pc1
 
+      - name: Run E2E Integration Tests
+        run: |
+          docker compose -f ./compose/pc1-server/docker-compose.yml cp ./tests/test_e2e.py server-api:/app/test_e2e.py
+          docker compose -f ./compose/pc1-server/docker-compose.yml exec -T server-api /app/.venv/bin/python /app/test_e2e.py
+
       - name: Clean up old Docker images
         if: always()
         run: docker image prune -f
