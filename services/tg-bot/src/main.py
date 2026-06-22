@@ -5,8 +5,8 @@ from aiogram import Bot, Dispatcher
 from aiogram.filters import Command
 from aiogram.types import Message
 
-from api_client import ServerApiClient, ServerApiError
-from config import load_settings
+from .api_client import ServerApiClient, ServerApiError
+from .config import load_settings
 
 
 logging.basicConfig(
@@ -18,7 +18,6 @@ logger = logging.getLogger(__name__)
 
 settings = load_settings()
 
-bot = Bot(token=settings.telegram_bot_token)
 dp = Dispatcher()
 
 api_client = ServerApiClient(
@@ -251,6 +250,7 @@ async def main() -> None:
     logger.info("Starting Telegram bot")
     logger.info("Server API URL: %s", settings.server_api_url)
 
+    bot = Bot(token=settings.telegram_bot_token)
     await dp.start_polling(bot)
 
 
