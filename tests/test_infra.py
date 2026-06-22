@@ -67,11 +67,10 @@ def check_http_endpoint(url, expected_code=200, timeout=3):
         return False, str(e)
 
 def run_pc1_tests(host):
-    print(f"\n🚀 Запуск проверок инфраструктуры ПК1 ({host})...")
+    print(f"\nЗапуск проверок инфраструктуры ПК1 ({host})...")
     
     ports_to_check = [
-        ("Caddy (HTTP Proxy)", 80),
-        ("ComfyUI (Direct)", 8188)
+        ("Caddy (HTTP Proxy)", 80)
     ]
     
     success = True
@@ -103,7 +102,7 @@ def run_pc1_tests(host):
     return success
 
 def run_pc2_tests(host):
-    print(f"\n📊 Запуск проверок мониторинга ПК2 ({host})...")
+    print(f"\nЗапуск проверок мониторинга ПК2 ({host})...")
     
     ports_to_check = [
         ("Grafana UI", 3000),
@@ -175,13 +174,13 @@ def main():
         if pc2_host != "localhost" or "--only-pc2" in sys.argv or "--pc2" in sys.argv:
             pc2_success = run_pc2_tests(pc2_host)
         else:
-            print("\n📊 Проверка ПК2 пропущена (хост настроен как localhost, используйте --only-pc2 для принудительного запуска)")
+            print("\nПроверка ПК2 пропущена (хост настроен как localhost, используйте --only-pc2 для принудительного запуска)")
 
     if not pc1_success or not pc2_success:
-        print(f"\n{RED}❌ Инфраструктурные тесты завалились!{RESET}")
+        print(f"\n{RED}Инфраструктурные тесты завалились!{RESET}")
         sys.exit(1)
         
-    print(f"\n{GREEN}✅ Все инфраструктурные тесты успешно пройдены!{RESET}")
+    print(f"\n{GREEN}Все инфраструктурные тесты успешно пройдены!{RESET}")
     sys.exit(0)
 
 if __name__ == "__main__":
