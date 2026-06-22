@@ -9,11 +9,9 @@ scrape_configs:
   - job_name: "prometheus"
     static_configs:
       - targets: ["localhost:9090"]
-
   # Мониторим сервисы на ПК1 (если они будут отдавать метрики)
-  - job_name: "pc1_services"
+  - job_name: "pc1-node-exporter"
     # Prometheus не поддерживает переменные окружения в targets по умолчанию.
     # Замените на реальный IP (например, 192.168.0.10)
     static_configs:
-      - targets: 
-          - "pc1-server:80" # Опрос сервисов через Caddy прокси на ПК1
+      - targets: ["192.168.1.113:9100"] # Пример для API на ПК1
