@@ -29,6 +29,9 @@ jobs:
           export BUILDKIT_PROGRESS=plain
           docker compose --progress=plain up -d --build --quiet-pull
 
+      - name: Wait for services initialization
+        run: sleep 30
+
       - name: Run Infrastructure Tests
         run: |
           python3 ./tests/test_infra.py --only-pc1
