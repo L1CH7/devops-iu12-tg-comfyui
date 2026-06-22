@@ -51,20 +51,29 @@ def check_tcp_port(host, port, timeout=3):
     except Exception as e:
         return False, str(e)
 
-def check_http_endpoint(url, expected_code=200, timeout=3):
-    try:
-        req = urllib.request.Request(url, headers={'User-Agent': 'InfraTestClient/1.0'})
-        with urllib.request.urlopen(req, timeout=timeout) as response:
-            code = response.getcode()
-            if code == expected_code:
-                return True, f"Status code {code}"
-            return False, f"Expected {expected_code}, got {code}"
-    except urllib.error.HTTPError as e:
-        if e.code == expected_code:
-            return True, f"Status code {e.code}"
-        return False, f"HTTP Error {e.code}"
-    except Exception as e:
-        return False, str(e)
+import time
+
+def check_http_endpoint(url, expected_code=200, timeout=3, retries=5, delay=2):
+    last_err = ""
+    for attempt in range(1, retries + 1):
+        try:
+            req = urllib.request.Request(url, headers={'User-Agent': 'InfraTestClient/1.0'})
+            with urllib.request.urlopen(req, timeout=timeout) as response:
+                code = response.getcode()
+                if code == expected_code:
+                    return True, f"Status code {code}"
+                last_err = f"Expected {expected_code}, got {code}"
+        except urllib.error.HTTPError as e:
+            if e.code == expected_code:
+                return True, f"Status code {e.code}"
+            last_err = f"HTTP Error {e.code}"
+        except Exception as e:
+            last_err = str(e)
+        
+        if attempt < retries:
+            time.sleep(delay)
+            
+    return False, f"{last_err} (after {retries} attempts)"
 
 def run_pc1_tests(host):
     print(f"\nЗапуск проверок инфраструктуры ПК1 ({host})...")
@@ -98,6 +107,21 @@ def run_pc1_tests(host):
         else:
             print_fail(f"Эндпоинт {name} ({url}) выдает ошибку", detail)
             success = False
+
+    # 3. Интеграционный тест: проверяем, что ComfyUI видит смонтированную модель
+    model_url = f"http://{url_host}/comfy/object_info"
+    try:
+        req = urllib.request.Request(model_url, headers={'User-Agent': 'InfraTestClient/1.0'})
+        with urllib.request.urlopen(req, timeout=10) as response:
+            content = response.read().decode('utf-8')
+            if "sd_xl_refiner_1.0.safetensors" in content:
+                print_ok("ComfyUI успешно обнаружил смонтированную модель sd_xl_refiner_1.0.safetensors")
+            else:
+                print_fail("ComfyUI НЕ видит модель sd_xl_refiner_1.0.safetensors в папке моделей")
+                success = False
+    except Exception as e:
+        print_fail("Не удалось проверить список моделей ComfyUI через API", str(e))
+        success = False
             
     return success
 
