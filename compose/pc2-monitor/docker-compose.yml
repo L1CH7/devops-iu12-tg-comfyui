@@ -47,7 +47,7 @@ services:
       - prometheus_data:/prometheus
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
     extra_hosts:
-      - "pc1-server:${PC1_LAN_IP}"
+      - "pc1-lan:${PC1_LAN_IP}"
     networks:
       - monitor_network
 
