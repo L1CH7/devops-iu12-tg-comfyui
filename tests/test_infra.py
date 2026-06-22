@@ -95,9 +95,9 @@ def run_pc1_tests(host):
     
     endpoints = [
         (f"http://{url_host}/", 200, "Caddy Fallback / API"),
-        (f"http://{url_host}/comfy/", 200, "ComfyUI via Caddy"),
+        (f"http://{url_host}:8188/", 200, "ComfyUI via Caddy"),
         (f"http://{url_host}/api/health", 200, "server-api via Caddy"),
-        (f"http://{url_host}/n8n/", 200, "n8n via Caddy")
+        (f"http://{url_host}:5678/", 200, "n8n via Caddy")
     ]
 
     for url, code, name in endpoints:
@@ -109,7 +109,7 @@ def run_pc1_tests(host):
             success = False
 
     # 3. Интеграционный тест: проверяем, что ComfyUI видит смонтированную модель
-    model_url = f"http://{url_host}/comfy/object_info"
+    model_url = f"http://{url_host}:8188/object_info"
     try:
         req = urllib.request.Request(model_url, headers={'User-Agent': 'InfraTestClient/1.0'})
         with urllib.request.urlopen(req, timeout=10) as response:
