@@ -96,6 +96,8 @@ services:
     image: yanwk/comfyui-boot:cu126-slim
     restart: unless-stopped
     gpus: all
+    volumes:
+      - /srv/storage-models/models:/root/ComfyUI/models
     networks:
       - app_network
 
