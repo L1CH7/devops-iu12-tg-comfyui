@@ -56,7 +56,7 @@ services:
     restart: unless-stopped
     user: root # Для обхода проблем с правами на запись в /loki при локальном запуске
     ports:
-      - "3100:3100" # Сюда Promtail с ПК1 будет слать логи
+      - "0.0.0.0:3100:3100" # Сюда Promtail с ПК1 будет слать логи
     volumes:
       - loki_data:/loki
     networks:
@@ -101,4 +101,16 @@ services:
     restart: unless-stopped
     networks:
       - monitor_network
+    volumes:
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
     # TODO: Настроить отправку вебхуков в админский ТГ при падении ПК1
+
+  tg-bot-stub:
+    image: ealen/echo-server:latest
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    networks:
+      - monitor_network
