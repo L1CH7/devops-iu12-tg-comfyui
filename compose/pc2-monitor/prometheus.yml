@@ -14,4 +14,9 @@ scrape_configs:
     # Prometheus не поддерживает переменные окружения в targets по умолчанию.
     # Замените на реальный IP (например, 192.168.0.10)
     static_configs:
-      - targets: ["192.168.1.113:9100"] # Пример для API на ПК1
+      - targets:
+        - "pc1-lan:9100" # Пример для API на ПК1
+  - job_name: "pc1-gpu-exporter"
+    static_configs:
+      - targets:
+        - "pc1-lan:9835"
