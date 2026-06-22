@@ -10,10 +10,9 @@ scrape_configs:
     static_configs:
       - targets: ["localhost:9090"]
 
-  # Мониторим сервисы на ПК1 (если они будут отдавать метрики)
+  # Мониторим сервисы на ПК1 (опрос идет через доменное имя pc1-server,
+  # которое резолвится через extra_hosts в docker-compose из переменной PC1_LAN_IP в .env)
   - job_name: "pc1_services"
-    # Prometheus не поддерживает переменные окружения в targets по умолчанию.
-    # Замените на реальный IP (например, 192.168.0.10)
     static_configs:
       - targets: 
           - "pc1-server:80" # Опрос сервисов через Caddy прокси на ПК1
