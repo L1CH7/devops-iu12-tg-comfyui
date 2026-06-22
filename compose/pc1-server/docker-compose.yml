@@ -75,6 +75,23 @@ services:
     networks:
       - app_network
 
+  minio-init:
+    image: minio/mc:RELEASE.2024-03-03T18-50-24Z
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      until (/usr/bin/mc alias set myminio http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD}); do echo 'Waiting for MinIO...' && sleep 1; done;
+      /usr/bin/mc mb --ignore-existing myminio/generations;
+      /usr/bin/mc anonymous set public myminio/generations;
+      exit 0;
+      "
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    networks:
+      - app_network
+
   # --- 3. Backend & Bot ---
   server-api:
     build: 
