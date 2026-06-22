@@ -148,4 +148,23 @@ services:
       - "9100:9100"
     networks:
       - app_network
+
+  nvidia-gpu-exporter:
+    image: utkuozdemir/nvidia_gpu_exporter:1.2.1
+    restart: unless-stopped
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=utility,compute
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    ports:
+      - "9835:9835"
+    networks:
+      - app_network
+
   # TODO: Добавить watchdog/скрипт для взаимного контроля ПК2
