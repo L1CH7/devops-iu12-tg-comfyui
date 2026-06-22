@@ -3,7 +3,7 @@ import socket
 import urllib.request
 import urllib.error
 import sys
-import argparse
+import os
 
 # Цвета для вывода в консоль
 GREEN = "\033[92m"
@@ -21,14 +21,29 @@ def print_fail(text, detail=None):
 def print_warn(text):
     print(f"{YELLOW}[WARN] {text}{RESET}")
 
+def load_env(env_path):
+    """Парсит .env файл и возвращает словарь переменных"""
+    env_vars = {}
+    if os.path.exists(env_path):
+        try:
+            with open(env_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    if "=" in line:
+                        k, v = line.split("=", 1)
+                        # Очищаем от кавычек и лишних пробелов
+                        env_vars[k.strip()] = v.strip().strip('"').strip("'")
+        except Exception as e:
+            print_warn(f"Не удалось прочитать {env_path}: {e}")
+    return env_vars
+
 def check_tcp_port(host, port, timeout=3):
-    """Проверяет доступность TCP-порта"""
-    # Поддержка IPv6 адресов (если адрес содержит двоеточия, socket требует семейство AF_INET6)
     family = socket.AF_INET6 if ":" in host else socket.AF_INET
     s = socket.socket(family, socket.SOCK_STREAM)
     s.settimeout(timeout)
     try:
-        # Убираем квадратные скобки для socket.connect, если они переданы
         clean_host = host.replace("[", "").replace("]", "")
         s.connect((clean_host, port))
         s.close()
@@ -37,7 +52,6 @@ def check_tcp_port(host, port, timeout=3):
         return False, str(e)
 
 def check_http_endpoint(url, expected_code=200, timeout=3):
-    """Проверяет HTTP-эндпоинт на код ответа"""
     try:
         req = urllib.request.Request(url, headers={'User-Agent': 'InfraTestClient/1.0'})
         with urllib.request.urlopen(req, timeout=timeout) as response:
@@ -53,23 +67,22 @@ def check_http_endpoint(url, expected_code=200, timeout=3):
         return False, str(e)
 
 def run_pc1_tests(host):
-    print(f"\n🚀 Запуск внешних проверок инфраструктуры ПК1 ({host})...")
+    print(f"\n🚀 Запуск проверок инфраструктуры ПК1 ({host})...")
     
-    # 1. Проверка внешних портов
     ports_to_check = [
         ("Caddy (HTTP Proxy)", 80),
         ("ComfyUI (Direct)", 8188)
     ]
     
+    success = True
     for name, port in ports_to_check:
         ok, err = check_tcp_port(host, port)
         if ok:
             print_ok(f"Порт {port} ({name}) доступен по TCP")
         else:
             print_fail(f"Порт {port} ({name}) НЕДОСТУПЕН по TCP", err)
+            success = False
 
-    # 2. Проверка HTTP-маршрутизации Caddy
-    # Оформляем IPv6 в квадратные скобки для URL
     url_host = f"[{host}]" if ":" in host else host
     
     endpoints = [
@@ -85,9 +98,12 @@ def run_pc1_tests(host):
             print_ok(f"Эндпоинт {name} ({url}) отвечает {code}")
         else:
             print_fail(f"Эндпоинт {name} ({url}) выдает ошибку", detail)
+            success = False
+            
+    return success
 
 def run_pc2_tests(host):
-    print(f"\n📊 Запуск внешних проверок мониторинга ПК2 ({host})...")
+    print(f"\n📊 Запуск проверок мониторинга ПК2 ({host})...")
     
     ports_to_check = [
         ("Grafana UI", 3000),
@@ -95,12 +111,14 @@ def run_pc2_tests(host):
         ("Loki API", 3100)
     ]
     
+    success = True
     for name, port in ports_to_check:
         ok, err = check_tcp_port(host, port)
         if ok:
             print_ok(f"Порт {port} ({name}) доступен по TCP")
         else:
             print_fail(f"Порт {port} ({name}) НЕДОСТУПЕН по TCP", err)
+            success = False
 
     url_host = f"[{host}]" if ":" in host else host
     
@@ -116,23 +134,55 @@ def run_pc2_tests(host):
             print_ok(f"Эндпоинт {name} ({url}) отвечает {code}")
         else:
             print_fail(f"Эндпоинт {name} ({url}) выдает ошибку", detail)
+            success = False
+            
+    return success
 
 def main():
-    parser = argparse.ArgumentParser(description="Скрипт интеграционного тестирования инфраструктуры проекта.")
-    parser.add_argument("--pc1", default="203:ddd5:7485:f6ac:90bd:ab97:cdbe:c177", help="IP-адрес или хост ПК1")
-    parser.add_argument("--pc2", default="203:ddd5:7485:f6ac:90bd:ab97:cdbe:c177", help="IP-адрес или хост ПК2")
-    parser.add_argument("--only-pc1", action="store_true", help="Запустить тесты только для ПК1")
-    parser.add_argument("--only-pc2", action="store_true", help="Запустить тесты только для ПК2")
-    
-    args = parser.parse_args()
+    # Определяем пути к .env файлам относительно корня проекта
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    pc1_env_path = os.path.join(base_dir, "compose", "pc1-server", ".env")
+    pc2_env_path = os.path.join(base_dir, "compose", "pc2-monitor", ".env")
 
-    if args.only_pc1:
-        run_pc1_tests(args.pc1)
-    elif args.only_pc2:
-        run_pc2_tests(args.pc2)
-    else:
-        run_pc1_tests(args.pc1)
-        run_pc2_tests(args.pc2)
+    # Читаем переменные из файлов
+    pc1_env = load_env(pc1_env_path)
+    pc2_env = load_env(pc2_env_path)
+
+    # Приоритет: 1. Системные env-переменные, 2. Значения из .env файлов, 3. Дефолт (localhost)
+    pc1_host = os.environ.get("PC1_YGG_IP") or pc1_env.get("PC1_YGG_IP") or "localhost"
+    
+    # Для ПК2 ищем PC2_YGG_IP, либо PC2_LAN_IP, либо дефолт
+    pc2_host = os.environ.get("PC2_YGG_IP") or pc2_env.get("PC2_YGG_IP") or "localhost"
+
+    # Если запускается в CI/CD на конкретном раннере, проверяем только этот хост
+    run_pc1 = True
+    run_pc2 = True
+
+    # Если передан аргумент командной строки для запуска конкретного набора тестов
+    if len(sys.argv) > 1:
+        if "--only-pc1" in sys.argv or "--pc1" in sys.argv:
+            run_pc2 = False
+        elif "--only-pc2" in sys.argv or "--pc2" in sys.argv:
+            run_pc1 = False
+
+    pc1_success = True
+    pc2_success = True
+
+    if run_pc1:
+        pc1_success = run_pc1_tests(pc1_host)
+        
+    if run_pc2:
+        if pc2_host != "localhost" or "--only-pc2" in sys.argv or "--pc2" in sys.argv:
+            pc2_success = run_pc2_tests(pc2_host)
+        else:
+            print("\n📊 Проверка ПК2 пропущена (хост настроен как localhost, используйте --only-pc2 для принудительного запуска)")
+
+    if not pc1_success or not pc2_success:
+        print(f"\n{RED}❌ Инфраструктурные тесты завалились!{RESET}")
+        sys.exit(1)
+        
+    print(f"\n{GREEN}✅ Все инфраструктурные тесты успешно пройдены!{RESET}")
+    sys.exit(0)
 
 if __name__ == "__main__":
     main()

@@ -31,7 +31,7 @@ jobs:
 
       - name: Run Infrastructure Tests
         run: |
-          python3 ./tests/test_infra.py --pc1
+          python3 ./tests/test_infra.py --only-pc1
 
       - name: Clean up old Docker images
         if: always()
@@ -64,7 +64,7 @@ jobs:
 
       - name: Run Infrastructure Tests
         run: |
-          python3 ./tests/test_infra.py --pc2
+          python3 ./tests/test_infra.py --only-pc2
 
       - name: Clean up old Docker images
         if: always()
