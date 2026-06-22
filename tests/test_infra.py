@@ -40,14 +40,10 @@ def load_env(env_path):
     return env_vars
 
 def check_tcp_port(host, port, timeout=3):
-    family = socket.AF_INET6 if ":" in host else socket.AF_INET
-    s = socket.socket(family, socket.SOCK_STREAM)
-    s.settimeout(timeout)
+    clean_host = host.replace("[", "").replace("]", "")
     try:
-        clean_host = host.replace("[", "").replace("]", "")
-        s.connect((clean_host, port))
-        s.close()
-        return True, None
+        with socket.create_connection((clean_host, port), timeout=timeout):
+            return True, None
     except Exception as e:
         return False, str(e)
 
@@ -114,10 +110,11 @@ def run_pc1_tests(host):
         req = urllib.request.Request(model_url, headers={'User-Agent': 'InfraTestClient/1.0'})
         with urllib.request.urlopen(req, timeout=10) as response:
             content = response.read().decode('utf-8')
-            if "sd_xl_refiner_1.0.safetensors" in content:
-                print_ok("ComfyUI успешно обнаружил смонтированную модель sd_xl_refiner_1.0.safetensors")
+            expected_model = os.environ.get("COMFYUI_TEST_MODEL", "sd_xl_refiner_1.0.safetensors")
+            if expected_model in content:
+                print_ok(f"ComfyUI успешно обнаружил смонтированную модель {expected_model}")
             else:
-                print_fail("ComfyUI НЕ видит модель sd_xl_refiner_1.0.safetensors в папке моделей")
+                print_fail(f"ComfyUI НЕ видит модель {expected_model} в папке моделей")
                 success = False
     except Exception as e:
         print_fail("Не удалось проверить список моделей ComfyUI через API", str(e))
@@ -175,7 +172,13 @@ def main():
     pc1_host = os.environ.get("PC1_YGG_IP") or pc1_env.get("PC1_YGG_IP") or "localhost"
     
     # Для ПК2 ищем PC2_YGG_IP, либо PC2_LAN_IP, либо дефолт
-    pc2_host = os.environ.get("PC2_YGG_IP") or pc2_env.get("PC2_YGG_IP") or "localhost"
+    pc2_host = (
+        os.environ.get("PC2_YGG_IP")
+        or pc2_env.get("PC2_YGG_IP")
+        or os.environ.get("PC2_LAN_IP")
+        or pc2_env.get("PC2_LAN_IP")
+        or "localhost"
+    )
 
     # Если запускается в CI/CD на конкретном раннере, проверяем только этот хост
     run_pc1 = True

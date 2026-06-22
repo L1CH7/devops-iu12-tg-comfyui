@@ -97,20 +97,20 @@ def main():
         
         # Чистим старые тестовые данные
         cur.execute("DELETE FROM generations WHERE model_type = 'e2e-test-model';")
-        cur.execute("DELETE FROM users WHERE tg_id IN (999999999, 888888888);")
+        cur.execute("DELETE FROM users WHERE tg_id IN (-999999999, -888888888);")
         conn.commit()
 
         # Вставляем обычного пользователя
         cur.execute(
             "INSERT INTO users (tg_id, username, role, daily_limit, cooldown_seconds) VALUES (%s, %s, %s, %s, %s) RETURNING id;",
-            (999999999, "e2e_user", "user", 10, 60)
+            (-999999999, "e2e_user", "user", 10, 60)
         )
         user_db_id = cur.fetchone()[0]
         
         # Вставляем VIP пользователя
         cur.execute(
             "INSERT INTO users (tg_id, username, role, daily_limit, cooldown_seconds) VALUES (%s, %s, %s, %s, %s) RETURNING id;",
-            (888888888, "e2e_vip", "vip", 100, 5)
+            (-888888888, "e2e_vip", "vip", 100, 5)
         )
         vip_db_id = cur.fetchone()[0]
         print_ok("Тестовые пользователи (обычный и VIP) успешно созданы")
@@ -251,10 +251,11 @@ def main():
         req = urllib.request.Request(url, headers={'User-Agent': 'E2ETestClient/1.0'})
         with urllib.request.urlopen(req, timeout=5) as response:
             content = response.read().decode('utf-8')
-            if "sd_xl_refiner_1.0.safetensors" in content:
-                print_ok("ComfyUI успешно видит модель 'sd_xl_refiner_1.0.safetensors'")
+            expected_model = os.environ.get("COMFYUI_TEST_MODEL", "sd_xl_refiner_1.0.safetensors")
+            if expected_model in content:
+                print_ok(f"ComfyUI успешно видит модель '{expected_model}'")
             else:
-                print_fail("ComfyUI НЕ видит модель 'sd_xl_refiner_1.0.safetensors' в object_info")
+                print_fail(f"ComfyUI НЕ видит модель '{expected_model}' в object_info")
                 success = False
     except Exception as e:
         print_fail("Ошибка при тестировании ComfyUI API", str(e))
