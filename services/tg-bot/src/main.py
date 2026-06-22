@@ -1,5 +1,4 @@
 import time
-import sys
 
 def main():
     print("Telegram Bot stub started successfully...", flush=True)

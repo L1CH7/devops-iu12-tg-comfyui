@@ -29,6 +29,18 @@ jobs:
           export BUILDKIT_PROGRESS=plain
           docker compose --progress=plain up -d --build --quiet-pull
 
+      - name: Wait for services initialization
+        run: sleep 30
+
+      - name: Run Infrastructure Tests
+        run: |
+          python3 ./tests/test_infra.py --only-pc1
+
+      - name: Run E2E Integration Tests
+        run: |
+          docker compose -f ./compose/pc1-server/docker-compose.yml cp ./tests/test_e2e.py server-api:/app/test_e2e.py
+          docker compose -f ./compose/pc1-server/docker-compose.yml exec -T server-api /app/.venv/bin/python /app/test_e2e.py
+
       - name: Clean up old Docker images
         if: always()
         run: docker image prune -f
@@ -57,6 +69,13 @@ jobs:
         run: |
           export BUILDKIT_PROGRESS=plain
           docker compose --progress=plain up -d --build --quiet-pull --wait
+
+      - name: Wait for monitor services initialization
+        run: sleep 10
+
+      - name: Run Infrastructure Tests
+        run: |
+          python3 ./tests/test_infra.py --only-pc2
 
       - name: Clean up old Docker images
         if: always()

@@ -2,6 +2,9 @@
 name = "server-api"
 version = "0.1.0"
 description = "Add your description here"
-readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "boto3>=1.43.34",
+    "psycopg2-binary>=2.9.12",
+    "redis>=8.0.0",
+]
