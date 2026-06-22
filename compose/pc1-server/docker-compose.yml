@@ -89,7 +89,6 @@ services:
       - N8N_PORT=5678
       - N8N_PROTOCOL=http
       - NODE_ENV=production
-      - N8N_SECURE_COOKIE=false
       - WEBHOOK_URL=http://[${PC1_YGG_IP}]:5678
       - N8N_ENCRYPTION_KEY=[${N8N_ENCRYPT_KEY}]
       - N8N_USER_MANAGEMENT_DISABLED=false
