@@ -1,5 +1,3 @@
-# TODO: Наполнить
-
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
@@ -9,9 +7,9 @@ scrape_configs:
   - job_name: "prometheus"
     static_configs:
       - targets: ["localhost:9090"]
-  # Мониторим сервисы на ПК1 (если они будут отдавать метрики)
+
+  # Мониторим node-exporter на ПК1
+  # Имя pc1-server резолвится через extra_hosts в docker-compose из переменной PC1_LAN_IP в .env
   - job_name: "pc1-node-exporter"
-    # Prometheus не поддерживает переменные окружения в targets по умолчанию.
-    # Замените на реальный IP (например, 192.168.0.10)
     static_configs:
-      - targets: ["192.168.1.113:9100"] # Пример для API на ПК1
+      - targets: ["pc1-server:9100"]

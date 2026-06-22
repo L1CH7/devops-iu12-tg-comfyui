@@ -6,9 +6,29 @@ networks:
 
 volumes:
   pg_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_STORAGE_DIR:-/srv/app-data}/postgres
   minio_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_STORAGE_DIR:-/srv/app-data}/minio
   n8n_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_STORAGE_DIR:-/srv/app-data}/n8n
   promtail_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_STORAGE_DIR:-/srv/app-data}/promtail
 
 services:
   # --- 1. Reverse Proxy ---
@@ -34,6 +54,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - pg_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
     networks:
       - app_network
 
@@ -53,6 +74,23 @@ services:
     command: server /data --console-address ":9001"
     volumes:
       - minio_data:/data
+    networks:
+      - app_network
+
+  minio-init:
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      until (/usr/bin/mc alias set myminio http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD}); do echo 'Waiting for MinIO...' && sleep 1; done;
+      /usr/bin/mc mb --ignore-existing myminio/generations;
+      /usr/bin/mc anonymous set public myminio/generations;
+      exit 0;
+      "
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     networks:
       - app_network
 
@@ -100,7 +138,7 @@ services:
     restart: unless-stopped
     gpus: all
     volumes:
-      - /srv/storage-models/models:/root/ComfyUI/models
+      - ${COMFYUI_MODELS_PATH:-/srv/storage-models/models}:/root/ComfyUI/models
     networks:
       - app_network
 

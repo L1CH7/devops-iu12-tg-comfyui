@@ -6,9 +6,29 @@ networks:
 
 volumes:
   prometheus_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_STORAGE_DIR:-/srv/app-data}/prometheus
   grafana_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_STORAGE_DIR:-/srv/app-data}/grafana
   loki_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_STORAGE_DIR:-/srv/app-data}/loki
   promtail_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_STORAGE_DIR:-/srv/app-data}/promtail
 
 services:
   prometheus:
