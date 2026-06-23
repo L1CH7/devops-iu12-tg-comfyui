@@ -226,18 +226,63 @@ def update_task_status(
             print(f"Failed to remove task from Redis: {exc}", flush=True)
 
 
-def run_background_generation(task_id: str, prompt: str, negative_prompt: str | None) -> None:
-    try:
-        print(f"Starting background generation for task {task_id}", flush=True)
-        update_task_status(task_id, "processing")
-        
-        result_url = generate_image_via_comfyui(prompt, negative_prompt, task_id)
-        
-        update_task_status(task_id, "completed", result_url=result_url)
-        print(f"Background generation completed for task {task_id}: {result_url}", flush=True)
-    except Exception as exc:
-        print(f"Background generation failed for task {task_id}: {exc}", flush=True)
-        update_task_status(task_id, "failed", error_message=str(exc))
+def queue_worker() -> None:
+    print("Queue worker thread started", flush=True)
+    redis_client = get_redis_client()
+    while True:
+        try:
+            # Get the task with the lowest score (highest priority)
+            tasks = redis_client.zrange(QUEUE_KEY, 0, 0)
+            if not tasks:
+                time.sleep(1)
+                continue
+
+            task_id = tasks[0]
+
+            # Try to claim the task by updating its status to 'processing'
+            with get_pg_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE generations
+                        SET status = 'processing', updated_at = CURRENT_TIMESTAMP
+                        WHERE id = %s AND status = 'pending'
+                        RETURNING id, inputs, negative_prompt;
+                        """,
+                        (task_id,),
+                    )
+                    row = cur.fetchone()
+                conn.commit()
+
+            if not row:
+                # Task was already claimed or processed, remove it from Redis queue
+                try:
+                    redis_client.zrem(QUEUE_KEY, task_id)
+                except Exception:
+                    pass
+                continue
+
+            # We successfully claimed the task!
+            inputs = parse_jsonb(row[1])
+            prompt = inputs.get("prompt", "")
+            negative_prompt = row[2]
+
+            print(f"Worker processing task {task_id}: prompt='{prompt}'", flush=True)
+
+            try:
+                # Run ComfyUI generation
+                result_url = generate_image_via_comfyui(prompt, negative_prompt, task_id)
+                
+                # Update task to completed
+                update_task_status(task_id, "completed", result_url=result_url)
+                print(f"Worker completed task {task_id}: {result_url}", flush=True)
+            except Exception as exc:
+                print(f"Worker failed task {task_id}: {exc}", flush=True)
+                update_task_status(task_id, "failed", error_message=str(exc))
+
+        except Exception as err:
+            print(f"Queue worker error: {err}", flush=True)
+            time.sleep(2)
 
 
 class ApiError(RuntimeError):
@@ -549,12 +594,7 @@ class ApiHandler(BaseHTTPRequestHandler):
         rank = redis_client.zrank(QUEUE_KEY, task_id)
         position = int(rank) + 1 if rank is not None else None
 
-        # Запуск фонового потока генерации в Python
-        threading.Thread(
-            target=run_background_generation,
-            args=(task_id, prompt, negative_prompt),
-            daemon=True
-        ).start()
+
 
         send_json(
             self,
@@ -751,6 +791,9 @@ class ApiHandler(BaseHTTPRequestHandler):
 
 
 def main():
+    # Запуск фонового воркера очереди
+    threading.Thread(target=queue_worker, daemon=True).start()
+
     server_address = ("", 8000)
     httpd = HTTPServer(server_address, ApiHandler)
 
