@@ -255,7 +255,11 @@ async def init_bot_with_fallback(token: str, proxies_str: str) -> Bot:
 
             session = AiohttpSession(proxy=proxy)
             bot = Bot(token=token, session=session)
-            me = await asyncio.wait_for(bot.get_me(), timeout=10.0)
+            try:
+                me = await asyncio.wait_for(bot.get_me(), timeout=10.0)
+            except Exception:
+                await bot.session.close()
+                raise
             logger.info("Successfully connected using proxy %s (Bot: @%s)", proxy, me.username)
             return bot
         except Exception as e:
