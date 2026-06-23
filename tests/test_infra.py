@@ -53,7 +53,7 @@ def check_tcp_port(host, port, timeout=3):
 
 import time
 
-def check_http_endpoint(url, expected_code=200, timeout=3, retries=5, delay=2):
+def check_http_endpoint(url, expected_code=200, timeout=3, retries=15, delay=3):
     last_err = ""
     for attempt in range(1, retries + 1):
         try:

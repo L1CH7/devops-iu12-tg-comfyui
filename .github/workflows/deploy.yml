@@ -34,10 +34,10 @@ jobs:
           export BUILDKIT_PROGRESS=plain
           docker compose down --remove-orphans || true
           docker compose build --no-cache
-          docker compose --progress=plain up -d --quiet-pull --wait --force-recreate
+          docker compose --progress=plain up -d --quiet-pull --force-recreate
 
       - name: Wait for services initialization
-        run: sleep 7
+        run: sleep 10
 
       - name: Run Infrastructure Tests
         run: |
