@@ -263,7 +263,7 @@ async def init_bot_with_fallback(token: str, proxies_str: str) -> Bot:
             logger.info("Successfully connected using proxy %s (Bot: @%s)", proxy, me.username)
             return bot
         except Exception as e:
-            logger.warning("Connection failed via proxy %s: %s", proxy, e)
+            logger.warning("Connection failed via proxy %s: %s", proxy.split("@")[-1], e)
 
     logger.error("All proxies failed. Falling back to direct connection.")
     return Bot(token=token)
