@@ -15,6 +15,11 @@ class BotSettings(BaseSettings):
         validation_alias=AliasChoices("SERVER_API_URL", "API_BASE_URL"),
     )
 
+    telegram_proxies: str = Field(
+        default="",
+        validation_alias=AliasChoices("TELEGRAM_PROXIES", "TG_PROXIES", "TELEGRAM_PROXY", "TG_PROXY"),
+    )
+
     generate_endpoint: str = "/api/generate"
     status_endpoint_template: str = "/api/status/{task_id}"
 
