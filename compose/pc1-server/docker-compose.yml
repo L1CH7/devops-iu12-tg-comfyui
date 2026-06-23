@@ -113,27 +113,41 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     env_file: .env
-    networks:
-      - app_network
+    network_mode: "host"
+    environment:
+      - SERVER_API_URL=http://127.0.0.1
     depends_on:
       - server-api
 
   # --- 4. AI & Workflows ---
+  n8n-init:
+    image: alpine:3.18
+    command: >
+      sh -c "mkdir -p /data && echo '{\"encryptionKey\": \"$${N8N_ENCRYPTION_KEY}\"}' > /data/config && chown -R 1000:1000 /data"
+    environment:
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPT_KEY:-default_n8n_encryption_key_value}
+    volumes:
+      - n8n_data:/data
+
   n8n:
     image: docker.n8n.io/n8nio/n8n:2.21.1
     restart: unless-stopped
     environment:
-      - N8N_HOST=[${PC1_YGG_IP}]
+      - N8N_HOST=${PC1_YGG_IP}
       - N8N_PORT=5678
       - N8N_PROTOCOL=http
       - NODE_ENV=production
+      - N8N_SECURE_COOKIE=false
       - WEBHOOK_URL=http://[${PC1_YGG_IP}]:5678
-      - N8N_ENCRYPTION_KEY=[${N8N_ENCRYPT_KEY}]
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPT_KEY:-default_n8n_encryption_key_value}
       - N8N_USER_MANAGEMENT_DISABLED=false
     volumes:
       - n8n_data:/home/node/.n8n
     networks:
       - app_network
+    depends_on:
+      n8n-init:
+        condition: service_completed_successfully
 
   comfyui:
     image: yanwk/comfyui-boot:cu126-slim

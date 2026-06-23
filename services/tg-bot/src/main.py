@@ -1,12 +1,10 @@
 import asyncio
 import logging
-import aiohttp
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.filters import Command
 from aiogram.types import Message
-from aiohttp_socks import SocksConnector
 
 from .api_client import ServerApiClient, ServerApiError
 from .config import load_settings
@@ -241,20 +239,6 @@ async def handle_status(message: Message) -> None:
     await message.answer("\n".join(lines))
 
 
-def create_bot_session(proxy_url: str) -> AiohttpSession:
-    """Создает сессию AiohttpSession с коннектором SocksConnector."""
-    if proxy_url.startswith("vless://"):
-        raise ValueError("vless proxy scheme is not supported natively by aiohttp")
-
-    # aiohttp_socks не понимает схему socks5h, заменяем ее на socks5
-    if proxy_url.startswith("socks5h://"):
-        proxy_url = proxy_url.replace("socks5h://", "socks5://", 1)
-        
-    connector = SocksConnector.from_url(proxy_url)
-    client_session = aiohttp.ClientSession(connector=connector)
-    return AiohttpSession(client=client_session)
-
-
 async def init_bot_with_fallback(token: str, proxies_str: str) -> Bot:
     """Инициализирует Bot с использованием первого рабочего прокси из списка."""
     proxies = [p.strip() for p in proxies_str.split(",") if p.strip()]
@@ -266,7 +250,10 @@ async def init_bot_with_fallback(token: str, proxies_str: str) -> Bot:
     for proxy in proxies:
         logger.info("Trying to connect to Telegram using proxy: %s", proxy)
         try:
-            session = create_bot_session(proxy)
+            if proxy.startswith("vless://"):
+                raise ValueError("vless proxy scheme is not supported")
+
+            session = AiohttpSession(proxy=proxy)
             bot = Bot(token=token, session=session)
             me = await asyncio.wait_for(bot.get_me(), timeout=10.0)
             logger.info("Successfully connected using proxy %s (Bot: @%s)", proxy, me.username)
