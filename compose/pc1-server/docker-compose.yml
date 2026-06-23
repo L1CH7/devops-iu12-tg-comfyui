@@ -123,7 +123,7 @@ services:
   n8n-init:
     image: alpine:3.18
     command: >
-      sh -c "mkdir -p /data && echo '{\"encryptionKey\": \"${N8N_ENCRYPT_KEY}\"}' > /data/config && chown -R 1000:1000 /data"
+      sh -c "mkdir -p /data && echo \"{\\\"encryptionKey\\\": \\\"${N8N_ENCRYPT_KEY}\\\"}\" > /data/config && chown -R 1000:1000 /data"
     volumes:
       - n8n_data:/data
 
