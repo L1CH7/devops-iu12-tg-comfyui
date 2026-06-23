@@ -27,6 +27,7 @@ jobs:
         # Устанавливаем переменную окружения для BuildKit и флаги для Compose
         run: |
           export BUILDKIT_PROGRESS=plain
+          docker compose down --remove-orphans || true
           docker compose --progress=plain up -d --build --quiet-pull
 
       - name: Wait for services initialization
