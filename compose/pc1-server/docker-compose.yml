@@ -101,6 +101,10 @@ services:
       dockerfile: Dockerfile
     restart: "no" # Заглушка, не перезапускаем при падении
     env_file: .env
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
     networks:
       - app_network
     depends_on:
@@ -115,7 +119,8 @@ services:
     env_file: .env
     network_mode: "host"
     environment:
-      - SERVER_API_URL=http://127.0.0.1
+      - SERVER_API_URL=http://127.0.0.1:8000
+      - PYTHONUNBUFFERED=1
     depends_on:
       - server-api
 
@@ -123,7 +128,7 @@ services:
   n8n-init:
     image: alpine:3.18
     command: >
-      sh -c "mkdir -p /data && echo \"{\\\"encryptionKey\\\": \\\"${N8N_ENCRYPT_KEY}\\\"}\" > /data/config && chown -R 1000:1000 /data"
+      sh -c "mkdir -p /data && echo '{\"encryptionKey\": \"${N8N_ENCRYPT_KEY}\"}' > /data/config && chown -R 1000:1000 /data"
     volumes:
       - n8n_data:/data
 
@@ -137,7 +142,7 @@ services:
       - NODE_ENV=production
       - N8N_SECURE_COOKIE=false
       - WEBHOOK_URL=http://[${PC1_YGG_IP}]:5678
-      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPT_KEY:-default_n8n_encryption_key_value}
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPT_KEY}
       - N8N_USER_MANAGEMENT_DISABLED=false
     volumes:
       - n8n_data:/home/node/.n8n

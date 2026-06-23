@@ -31,7 +31,24 @@ class BotSettings(BaseSettings):
         env_prefix="",
         extra="ignore",
     )
+    
+    generation_wait_timeout_seconds: float = Field(
+        default=300.0,
+        validation_alias=AliasChoices(
+            "GENERATION_WAIT_TIMEOUT_SECONDS",
+            "TG_BOT_GENERATION_WAIT_TIMEOUT_SECONDS",
+        ),
+    )
+
+    result_download_timeout_seconds: float = Field(
+        default=30.0,
+        validation_alias=AliasChoices(
+            "RESULT_DOWNLOAD_TIMEOUT_SECONDS",
+            "TG_BOT_RESULT_DOWNLOAD_TIMEOUT_SECONDS",
+        ),
+    )
 
 
 def load_settings() -> BotSettings:
     return BotSettings()
+
