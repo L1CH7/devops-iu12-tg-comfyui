@@ -22,6 +22,9 @@ settings = load_settings()
 
 dp = Dispatcher()
 
+# Множество для отслеживания активных генераций пользователей
+active_generations = set()
+
 api_client = ServerApiClient(
     base_url=settings.server_api_url,
     generate_endpoint=settings.generate_endpoint,
@@ -193,76 +196,78 @@ async def send_generated_image(bot: Bot, chat_id: int, task: GenerationTask) -> 
         )
 
 
-async def wait_for_generation_result(bot: Bot, chat_id: int, task_id: str) -> None:
+async def wait_for_generation_result(bot: Bot, chat_id: int, task_id: str, telegram_user_id: int) -> None:
     """
     После /generate бот сам периодически проверяет статус задачи.
 
     Если server-api получил callback от n8n и обновил задачу до completed,
     бот скачивает картинку и отправляет её пользователю.
     """
-
-    polling_interval = max(1.0, float(settings.polling_interval_seconds))
-    wait_timeout = float(getattr(settings, "generation_wait_timeout_seconds", 300.0))
-    max_attempts = max(1, int(wait_timeout / polling_interval))
-
-    logger.info(
-        "Start polling generation result: task_id=%s, interval=%s, max_attempts=%s",
-        task_id,
-        polling_interval,
-        max_attempts,
-    )
-
-    for attempt in range(1, max_attempts + 1):
-        await asyncio.sleep(polling_interval)
-
-        try:
-            task = await api_client.get_generation_status(task_id)
-        except Exception as error:
-            logger.warning(
-                "Failed to poll generation status: task_id=%s, attempt=%s, error=%s",
-                task_id,
-                attempt,
-                error,
-            )
-            continue
-
-        status = task.status.lower()
+    try:
+        polling_interval = max(1.0, float(settings.polling_interval_seconds))
+        wait_timeout = float(getattr(settings, "generation_wait_timeout_seconds", 300.0))
+        max_attempts = max(1, int(wait_timeout / polling_interval))
 
         logger.info(
-            "Generation status polled: task_id=%s, status=%s, attempt=%s",
+            "Start polling generation result: task_id=%s, interval=%s, max_attempts=%s",
             task_id,
-            status,
-            attempt,
+            polling_interval,
+            max_attempts,
         )
 
-        if status in {"completed", "done", "success"}:
-            await send_generated_image(
-                bot=bot,
-                chat_id=chat_id,
-                task=task,
-            )
-            return
+        for attempt in range(1, max_attempts + 1):
+            await asyncio.sleep(polling_interval)
 
-        if status in {"failed", "error"}:
-            await bot.send_message(
-                chat_id=chat_id,
-                text=(
-                    "❌ Генерация завершилась ошибкой.\n\n"
-                    f"ID задачи: {task.task_id}\n"
-                    f"Ошибка: {task.error or 'не указана'}"
-                ),
-            )
-            return
+            try:
+                task = await api_client.get_generation_status(task_id)
+            except Exception as error:
+                logger.warning(
+                    "Failed to poll generation status: task_id=%s, attempt=%s, error=%s",
+                    task_id,
+                    attempt,
+                    error,
+                )
+                continue
 
-    await bot.send_message(
-        chat_id=chat_id,
-        text=(
-            "⏳ Время ожидания генерации истекло.\n\n"
-            f"ID задачи: {task_id}\n"
-            "Задача могла остаться в обработке. Проверь статус вручную:\n"
-            f"/status {task_id}"
-        ),
-    )
+            status = task.status.lower()
+
+            logger.info(
+                "Generation status polled: task_id=%s, status=%s, attempt=%s",
+                task_id,
+                status,
+                attempt,
+            )
+
+            if status in {"completed", "done", "success"}:
+                await send_generated_image(
+                    bot=bot,
+                    chat_id=chat_id,
+                    task=task,
+                )
+                return
+
+            if status in {"failed", "error"}:
+                await bot.send_message(
+                    chat_id=chat_id,
+                    text=(
+                        "❌ Генерация завершилась ошибкой.\n\n"
+                        f"ID задачи: {task.task_id}\n"
+                        f"Ошибка: {task.error or 'не указана'}"
+                    ),
+                )
+                return
+
+        await bot.send_message(
+            chat_id=chat_id,
+            text=(
+                "⏳ Время ожидания генерации истекло.\n\n"
+                f"ID задачи: {task_id}\n"
+                "Задача могла остаться в обработке. Проверь статус вручную:\n"
+                f"/status {task_id}"
+            ),
+        )
+    finally:
+        active_generations.discard(telegram_user_id)
 
 
 @dp.message(Command("start"))
@@ -328,6 +333,15 @@ async def handle_generate(message: Message, bot: Bot) -> None:
     telegram_user_id = message.from_user.id if message.from_user else 0
     chat_id = message.chat.id
 
+    if telegram_user_id != 0 and telegram_user_id in active_generations:
+        await message.answer(
+            "❌ У вас уже есть активная задача генерации. "
+            "Пожалуйста, дождитесь завершения текущей генерации, прежде чем отправлять новый запрос."
+        )
+        return
+
+    active_generations.add(telegram_user_id)
+
     await message.answer("⏳ Отправляю задачу генерации в server-api...")
 
     try:
@@ -338,6 +352,7 @@ async def handle_generate(message: Message, bot: Bot) -> None:
             negative_prompt=negative_prompt,
         )
     except ServerApiError as error:
+        active_generations.discard(telegram_user_id)
         logger.exception("Failed to create generation task")
         await message.answer(
             "❌ Не удалось создать задачу генерации.\n\n"
@@ -345,6 +360,7 @@ async def handle_generate(message: Message, bot: Bot) -> None:
         )
         return
     except Exception as error:
+        active_generations.discard(telegram_user_id)
         logger.exception("Unexpected error while creating generation task")
         await message.answer(
             "❌ Произошла непредвиденная ошибка при создании задачи.\n\n"
@@ -365,6 +381,7 @@ async def handle_generate(message: Message, bot: Bot) -> None:
             bot=bot,
             chat_id=chat_id,
             task_id=task.task_id,
+            telegram_user_id=telegram_user_id,
         )
     )
 
