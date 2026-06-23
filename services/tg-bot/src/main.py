@@ -248,7 +248,7 @@ async def init_bot_with_fallback(token: str, proxies_str: str) -> Bot:
         return Bot(token=token)
 
     for proxy in proxies:
-        logger.info("Trying to connect to Telegram using proxy: %s", proxy)
+        logger.info("Trying to connect to Telegram using proxy: %s", proxy.split("@")[-1])
         try:
             if proxy.startswith("vless://"):
                 raise ValueError("vless proxy scheme is not supported")
