@@ -242,7 +242,137 @@ def main():
         print_fail("Ошибка при тестировании MinIO S3", str(e))
         success = False
 
-    # ------------------ 5. ТЕСТИРОВАНИЕ COMFYUI ------------------
+
+    # ------------------ 5. ТЕСТИРОВАНИЕ SERVER-API GENERATION ENDPOINTS ------------------
+    print("\n--- Проверка server-api generation endpoints ---")
+    api_task_id = None
+    api_tg_id = 777000000 + int(time.time()) % 100000
+
+    try:
+        api_base_url = "http://localhost:8000"
+
+        # 1. Проверяем health endpoint API.
+        health_url = f"{api_base_url}/api/health"
+        health_req = urllib.request.Request(
+            health_url,
+            headers={"User-Agent": "E2ETestClient/1.0"},
+        )
+
+        with urllib.request.urlopen(health_req, timeout=5) as response:
+            health_payload = json.loads(response.read().decode("utf-8"))
+
+        assert health_payload["status"] == "ok", f"Некорректный health response: {health_payload}"
+        assert health_payload["service"] == "server-api", f"Некорректное имя сервиса: {health_payload}"
+        print_ok("server-api health endpoint успешно ответил")
+
+        # 2. Создаём задачу генерации через публичный API.
+        generate_payload = {
+            "telegram_user_id": api_tg_id,
+            "chat_id": api_tg_id,
+            "username": "e2e_api_user",
+            "prompt": "E2E test image prompt",
+            "negative_prompt": "blur, low quality",
+            "model_type": "e2e-test-model",
+        }
+
+        generate_body = json.dumps(generate_payload).encode("utf-8")
+        generate_req = urllib.request.Request(
+            f"{api_base_url}/api/generate",
+            data=generate_body,
+            method="POST",
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": "E2ETestClient/1.0",
+            },
+        )
+
+        with urllib.request.urlopen(generate_req, timeout=10) as response:
+            assert response.status == 202, f"Ожидался HTTP 202, получен {response.status}"
+            generate_response = json.loads(response.read().decode("utf-8"))
+
+        api_task_id = generate_response.get("task_id")
+        assert api_task_id, f"API не вернул task_id: {generate_response}"
+        assert generate_response.get("status") == "pending", f"Некорректный статус: {generate_response}"
+        assert generate_response.get("position") is not None, f"API не вернул позицию в очереди: {generate_response}"
+
+        print_ok(
+            f"POST /api/generate создал задачу {api_task_id} "
+            f"с позицией {generate_response.get('position')}"
+        )
+
+        # 3. Проверяем, что задача действительно попала в Redis ZSET.
+        api_redis = redis.Redis(
+            host=redis_host,
+            port=6379,
+            password=redis_pass,
+            decode_responses=True,
+        )
+        redis_rank = api_redis.zrank("queue:generations", api_task_id)
+
+        assert redis_rank is not None, "Задача не найдена в Redis ZSET queue:generations"
+        print_ok(f"Задача найдена в Redis queue:generations, позиция = {redis_rank + 1}")
+
+        # 4. Проверяем, что задача действительно создана в PostgreSQL.
+        api_conn = psycopg2.connect(
+            host=pg_host,
+            database=db_name,
+            user=db_user,
+            password=db_pass,
+            port=5432,
+        )
+        api_cur = api_conn.cursor()
+
+        api_cur.execute(
+            """
+            SELECT g.id, g.status, g.model_type, g.negative_prompt, u.tg_id, u.username
+            FROM generations g
+            JOIN users u ON u.id = g.user_id
+            WHERE g.id = %s;
+            """,
+            (api_task_id,),
+        )
+        api_row = api_cur.fetchone()
+
+        assert api_row is not None, "Задача не найдена в PostgreSQL"
+        assert str(api_row[0]) == api_task_id, f"Некорректный id задачи в БД: {api_row[0]}"
+        assert api_row[1] == "pending", f"Некорректный статус задачи в БД: {api_row[1]}"
+        assert api_row[2] == "e2e-test-model", f"Некорректный model_type: {api_row[2]}"
+        assert api_row[3] == "blur, low quality", f"Некорректный negative_prompt: {api_row[3]}"
+        assert api_row[4] == api_tg_id, f"Некорректный tg_id пользователя: {api_row[4]}"
+
+        print_ok("Задача генерации успешно найдена и проверена в PostgreSQL")
+
+        # 5. Проверяем GET /api/status/{task_id}.
+        status_req = urllib.request.Request(
+            f"{api_base_url}/api/status/{api_task_id}",
+            headers={"User-Agent": "E2ETestClient/1.0"},
+        )
+
+        with urllib.request.urlopen(status_req, timeout=5) as response:
+            assert response.status == 200, f"Ожидался HTTP 200, получен {response.status}"
+            status_response = json.loads(response.read().decode("utf-8"))
+
+        assert status_response.get("task_id") == api_task_id, f"Некорректный task_id: {status_response}"
+        assert status_response.get("status") == "pending", f"Некорректный статус: {status_response}"
+        assert status_response.get("position") is not None, f"Нет позиции в очереди: {status_response}"
+
+        print_ok("GET /api/status/{task_id} успешно вернул статус задачи")
+
+        # 6. Очищаем данные теста.
+        api_redis.zrem("queue:generations", api_task_id)
+        api_cur.execute("DELETE FROM generations WHERE id = %s;", (api_task_id,))
+        api_cur.execute("DELETE FROM users WHERE tg_id = %s;", (api_tg_id,))
+        api_conn.commit()
+        api_cur.close()
+        api_conn.close()
+
+        print_ok("Тестовые данные server-api успешно очищены")
+
+    except Exception as e:
+        print_fail("Ошибка при тестировании server-api generation endpoints", str(e))
+        success = False
+        
+    # ------------------ 6. ТЕСТИРОВАНИЕ COMFYUI ------------------
     print("\n--- Проверка ComfyUI API ---")
     try:
         # Так как порт ComfyUI 8188 закрыт извне на ПК1 (доступ только через прокси caddy по пути /comfy/),
