@@ -36,7 +36,7 @@ jobs:
           docker compose --progress=plain up -d --build --quiet-pull
 
       - name: Wait for services initialization
-        run: sleep 30
+        run: sleep 7
 
       - name: Run Infrastructure Tests
         run: |
@@ -77,7 +77,7 @@ jobs:
           docker compose --progress=plain up -d --build --quiet-pull --wait
 
       - name: Wait for monitor services initialization
-        run: sleep 10
+        run: sleep 7
 
       - name: Run Infrastructure Tests
         run: |
