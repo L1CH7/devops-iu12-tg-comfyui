@@ -3,11 +3,15 @@ import os
 import time
 import uuid
 import urllib.request
+import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlparse
 
 import psycopg2
 import redis
+import boto3
+from botocore.client import Config
+import urllib.parse
 
 
 POSTGRES_HOST = os.getenv("POSTGRES_HOST", "postgres")
@@ -27,6 +31,213 @@ PIPELINE_CALLBACK_URL = os.getenv(
     "http://server-api:8000/api/generation-result",
 )
 PIPELINE_CALLBACK_TOKEN = os.getenv("PIPELINE_CALLBACK_TOKEN", "")
+
+
+MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "http://minio:9000")
+MINIO_ROOT_USER = os.getenv("MINIO_ROOT_USER", "admin")
+MINIO_ROOT_PASSWORD = os.getenv("MINIO_ROOT_PASSWORD", "supersecret_minio_password")
+COMFYUI_URL = os.getenv("COMFYUI_URL", "http://comfyui:8188")
+
+
+def generate_image_via_comfyui(prompt: str, negative_prompt: str | None, task_id: str) -> str:
+    workflow = {
+        "3": {
+            "inputs": {
+                "seed": int(time.time()),
+                "steps": 25,
+                "cfg": 7.0,
+                "sampler_name": "euler",
+                "scheduler": "normal",
+                "denoise": 1.0,
+                "model": ["4", 0],
+                "positive": ["6", 0],
+                "negative": ["7", 0],
+                "latent_image": ["5", 0]
+            },
+            "class_type": "KSampler"
+        },
+        "4": {
+            "inputs": {
+                "ckpt_name": "sd_xl_refiner_1.0.safetensors"
+            },
+            "class_type": "CheckpointLoaderSimple"
+        },
+        "5": {
+            "inputs": {
+                "width": 1024,
+                "height": 1024,
+                "batch_size": 1
+            },
+            "class_type": "EmptyLatentImage"
+        },
+        "6": {
+            "inputs": {
+                "text": prompt,
+                "clip": ["4", 1]
+            },
+            "class_type": "CLIPTextEncode"
+        },
+        "7": {
+            "inputs": {
+                "text": negative_prompt or "blurry, low quality, ugly, distorted",
+                "clip": ["4", 1]
+            },
+            "class_type": "CLIPTextEncode"
+        },
+        "8": {
+            "inputs": {
+                "samples": ["3", 0],
+                "vae": ["4", 2]
+            },
+            "class_type": "VAEDecode"
+        },
+        "9": {
+            "inputs": {
+                "filename_prefix": task_id,
+                "images": ["8", 0]
+            },
+            "class_type": "SaveImage"
+        }
+    }
+
+    prompt_data = {"prompt": workflow}
+    body = json.dumps(prompt_data).encode("utf-8")
+    
+    req = urllib.request.Request(
+        f"{COMFYUI_URL}/prompt",
+        data=body,
+        headers={"Content-Type": "application/json", "User-Agent": "server-api/1.0"}
+    )
+    
+    try:
+        with urllib.request.urlopen(req, timeout=10) as response:
+            res = json.loads(response.read().decode("utf-8"))
+            prompt_id = res["prompt_id"]
+    except Exception as exc:
+        raise RuntimeError(f"Failed to submit prompt to ComfyUI: {exc}")
+
+    filename = None
+    subfolder = None
+    image_type = None
+    
+    for _ in range(60): # 120 seconds max timeout
+        history_url = f"{COMFYUI_URL}/history/{prompt_id}"
+        try:
+            req = urllib.request.Request(history_url, headers={"User-Agent": "server-api/1.0"})
+            with urllib.request.urlopen(req, timeout=5) as response:
+                history = json.loads(response.read().decode("utf-8"))
+                if prompt_id in history:
+                    outputs = history[prompt_id]["outputs"]
+                    for node_id in outputs:
+                        if "images" in outputs[node_id]:
+                            img_info = outputs[node_id]["images"][0]
+                            filename = img_info["filename"]
+                            subfolder = img_info["subfolder"]
+                            image_type = img_info["type"]
+                    break
+        except Exception:
+            pass
+        time.sleep(2)
+
+    if not filename:
+        raise RuntimeError("ComfyUI generation timed out or failed")
+
+    params = urllib.parse.urlencode({
+        "filename": filename,
+        "subfolder": subfolder or "",
+        "type": image_type or "output"
+    })
+    view_url = f"{COMFYUI_URL}/view?{params}"
+    
+    try:
+        req = urllib.request.Request(view_url, headers={"User-Agent": "server-api/1.0"})
+        with urllib.request.urlopen(req, timeout=15) as response:
+            image_bytes = response.read()
+    except Exception as exc:
+        raise RuntimeError(f"Failed to download image from ComfyUI: {exc}")
+
+    try:
+        s3 = boto3.client(
+            "s3",
+            endpoint_url=MINIO_ENDPOINT,
+            aws_access_key_id=MINIO_ROOT_USER,
+            aws_secret_access_key=MINIO_ROOT_PASSWORD,
+            config=Config(signature_version="s3v4")
+        )
+        s3_key = f"{task_id}.png"
+        s3.put_object(
+            Bucket="generations",
+            Key=s3_key,
+            Body=image_bytes,
+            ContentType="image/png"
+        )
+    except Exception as exc:
+        raise RuntimeError(f"Failed to upload image to MinIO: {exc}")
+
+    return f"http://127.0.0.1:9000/generations/{s3_key}"
+
+
+def update_task_status(
+    task_id: str,
+    status: str,
+    result_url: str | None = None,
+    comfy_prompt_id: str | None = None,
+    error_message: str | None = None,
+    extra_outputs: dict | None = None
+) -> None:
+    outputs = {}
+    if result_url:
+        outputs["result_url"] = result_url
+    if extra_outputs:
+        outputs.update(extra_outputs)
+
+    with get_pg_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE generations
+                SET
+                    status = %s,
+                    comfy_prompt_id = COALESCE(%s, comfy_prompt_id),
+                    outputs = %s::jsonb,
+                    error_message = %s,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+                RETURNING id;
+                """,
+                (
+                    status,
+                    comfy_prompt_id,
+                    json.dumps(outputs, ensure_ascii=False),
+                    error_message,
+                    task_id,
+                ),
+            )
+            updated = cur.fetchone()
+            if updated is None:
+                raise ApiError(404, f"generation task not found: {task_id}")
+        conn.commit()
+
+    if status in {"completed", "failed"}:
+        try:
+            redis_client = get_redis_client()
+            redis_client.zrem(QUEUE_KEY, task_id)
+        except Exception as exc:
+            print(f"Failed to remove task from Redis: {exc}", flush=True)
+
+
+def run_background_generation(task_id: str, prompt: str, negative_prompt: str | None) -> None:
+    try:
+        print(f"Starting background generation for task {task_id}", flush=True)
+        update_task_status(task_id, "processing")
+        
+        result_url = generate_image_via_comfyui(prompt, negative_prompt, task_id)
+        
+        update_task_status(task_id, "completed", result_url=result_url)
+        print(f"Background generation completed for task {task_id}: {result_url}", flush=True)
+    except Exception as exc:
+        print(f"Background generation failed for task {task_id}: {exc}", flush=True)
+        update_task_status(task_id, "failed", error_message=str(exc))
 
 
 class ApiError(RuntimeError):
@@ -338,19 +549,12 @@ class ApiHandler(BaseHTTPRequestHandler):
         rank = redis_client.zrank(QUEUE_KEY, task_id)
         position = int(rank) + 1 if rank is not None else None
 
-        trigger_n8n_pipeline(
-            {
-                "task_id": task_id,
-                "telegram_user_id": telegram_user_id,
-                "chat_id": chat_id,
-                "username": username,
-                "prompt": prompt,
-                "negative_prompt": negative_prompt,
-                "model_type": model_type,
-                "callback_url": PIPELINE_CALLBACK_URL,
-                "callback_token": PIPELINE_CALLBACK_TOKEN,
-            }
-        )
+        # Запуск фонового потока генерации в Python
+        threading.Thread(
+            target=run_background_generation,
+            args=(task_id, prompt, negative_prompt),
+            daemon=True
+        ).start()
 
         send_json(
             self,
@@ -518,49 +722,14 @@ class ApiHandler(BaseHTTPRequestHandler):
         if status == "completed" and not result_url:
             raise ApiError(400, "result_url is required for completed status")
 
-        outputs = {}
-
-        if result_url:
-            outputs["result_url"] = result_url
-
-        extra_outputs = payload.get("outputs")
-
-        if isinstance(extra_outputs, dict):
-            outputs.update(extra_outputs)
-
-        with get_pg_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    UPDATE generations
-                    SET
-                        status = %s,
-                        comfy_prompt_id = COALESCE(%s, comfy_prompt_id),
-                        outputs = %s::jsonb,
-                        error_message = %s,
-                        updated_at = CURRENT_TIMESTAMP
-                    WHERE id = %s
-                    RETURNING id;
-                    """,
-                    (
-                        status,
-                        comfy_prompt_id,
-                        json.dumps(outputs, ensure_ascii=False),
-                        error_message,
-                        task_id,
-                    ),
-                )
-
-                updated = cur.fetchone()
-
-                if updated is None:
-                    raise ApiError(404, f"generation task not found: {task_id}")
-
-            conn.commit()
-
-        if status in {"completed", "failed"}:
-            redis_client = get_redis_client()
-            redis_client.zrem(QUEUE_KEY, task_id)
+        update_task_status(
+            task_id=task_id,
+            status=status,
+            result_url=result_url,
+            comfy_prompt_id=comfy_prompt_id,
+            error_message=error_message,
+            extra_outputs=payload.get("outputs"),
+        )
 
         send_json(
             self,
