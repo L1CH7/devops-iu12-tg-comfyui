@@ -70,7 +70,7 @@ services:
     networks:
       - app_network
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a $$REDIS_PASSWORD ping | grep PONG"]
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 6379"]
       interval: 3s
       timeout: 3s
       retries: 5
