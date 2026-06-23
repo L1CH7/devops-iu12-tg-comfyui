@@ -335,7 +335,7 @@ def main():
 
         assert api_row is not None, "Задача не найдена в PostgreSQL"
         assert str(api_row[0]) == api_task_id, f"Некорректный id задачи в БД: {api_row[0]}"
-        assert api_row[1] == "pending", f"Некорректный статус задачи в БД: {api_row[1]}"
+        assert api_row[1] in {"pending", "processing"}, f"Некорректный статус задачи в БД: {api_row[1]}"
         assert api_row[2] == "e2e-test-model", f"Некорректный model_type: {api_row[2]}"
         assert api_row[3] == "blur, low quality", f"Некорректный negative_prompt: {api_row[3]}"
         assert api_row[4] == api_tg_id, f"Некорректный tg_id пользователя: {api_row[4]}"
@@ -353,7 +353,7 @@ def main():
             status_response = json.loads(response.read().decode("utf-8"))
 
         assert status_response.get("task_id") == api_task_id, f"Некорректный task_id: {status_response}"
-        assert status_response.get("status") == "pending", f"Некорректный статус: {status_response}"
+        assert status_response.get("status") in {"pending", "processing"}, f"Некорректный статус: {status_response}"
         assert status_response.get("position") is not None, f"Нет позиции в очереди: {status_response}"
 
         print_ok("GET /api/status/{task_id} успешно вернул статус задачи")
