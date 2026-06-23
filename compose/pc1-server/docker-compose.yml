@@ -123,12 +123,13 @@ services:
     image: docker.n8n.io/n8nio/n8n:2.21.1
     restart: unless-stopped
     environment:
-      - N8N_HOST=[${PC1_YGG_IP}]
+      - N8N_HOST=${PC1_YGG_IP}
       - N8N_PORT=5678
       - N8N_PROTOCOL=http
       - NODE_ENV=production
+      - N8N_SECURE_COOKIE=false
       - WEBHOOK_URL=http://[${PC1_YGG_IP}]:5678
-      - N8N_ENCRYPTION_KEY=[${N8N_ENCRYPT_KEY}]
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPT_KEY:-default_n8n_encryption_key_value}
       - N8N_USER_MANAGEMENT_DISABLED=false
     volumes:
       - n8n_data:/home/node/.n8n
