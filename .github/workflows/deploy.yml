@@ -21,6 +21,11 @@ jobs:
           printf "%s\n" "${{ secrets.ENV_PC1 }}" > ./compose/pc1-server/.env
           chmod 600 ./compose/pc1-server/.env
 
+      - name: Pre-create volumes directories
+        run: |
+          docker run --rm -v /srv:/srv alpine mkdir -p /srv/app-data/postgres /srv/app-data/minio /srv/app-data/n8n /srv/app-data/promtail
+          docker run --rm -v /srv:/srv alpine chmod -R 777 /srv/app-data
+
       - name: Build and Deploy Server
         # Говорим раннеру перейти в папку первого ПК перед выполнением команд
         working-directory: ./compose/pc1-server
