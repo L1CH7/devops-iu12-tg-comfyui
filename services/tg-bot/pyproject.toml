@@ -5,6 +5,7 @@ description = "Add your description here"
 requires-python = ">=3.12"
 dependencies = [
     "aiogram>=3.29.0",
+    "aiohttp-socks>=0.11.0",
     "httpx>=0.28.1",
     "pydantic-settings>=2.14.2",
 ]

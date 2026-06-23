@@ -2,8 +2,10 @@ import asyncio
 import logging
 
 from aiogram import Bot, Dispatcher
+from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.filters import Command
 from aiogram.types import Message
+from aiohttp_socks import SocksConnector
 
 from .api_client import ServerApiClient, ServerApiError
 from .config import load_settings
@@ -238,6 +240,30 @@ async def handle_status(message: Message) -> None:
     await message.answer("\n".join(lines))
 
 
+async def init_bot_with_fallback(token: str, proxies_str: str) -> Bot:
+    """Инициализирует Bot с использованием первого рабочего прокси из списка."""
+    proxies = [p.strip() for p in proxies_str.split(",") if p.strip()]
+
+    if not proxies:
+        logger.info("No telegram proxies configured. Using direct connection.")
+        return Bot(token=token)
+
+    for proxy in proxies:
+        logger.info("Trying to connect to Telegram using proxy: %s", proxy)
+        try:
+            connector = SocksConnector.from_url(proxy)
+            session = AiohttpSession(connector=connector)
+            bot = Bot(token=token, session=session)
+            me = await asyncio.wait_for(bot.get_me(), timeout=10.0)
+            logger.info("Successfully connected using proxy %s (Bot: @%s)", proxy, me.username)
+            return bot
+        except Exception as e:
+            logger.warning("Connection failed via proxy %s: %s", proxy, e)
+
+    logger.error("All proxies failed. Falling back to direct connection.")
+    return Bot(token=token)
+
+
 async def main() -> None:
     """Точка входа в Telegram-бота."""
 
@@ -250,8 +276,12 @@ async def main() -> None:
     logger.info("Starting Telegram bot")
     logger.info("Server API URL: %s", settings.server_api_url)
 
-    bot = Bot(token=settings.telegram_bot_token)
-    await dp.start_polling(bot)
+    bot = await init_bot_with_fallback(settings.telegram_bot_token, settings.telegram_proxies)
+    
+    try:
+        await dp.start_polling(bot)
+    finally:
+        await bot.session.close()
 
 
 if __name__ == "__main__":

@@ -111,7 +111,7 @@ services:
     build:
       context: ../../services/tg-bot
       dockerfile: Dockerfile
-    restart: "no" # Заглушка, не перезапускаем при падении
+    restart: unless-stopped
     env_file: .env
     networks:
       - app_network
